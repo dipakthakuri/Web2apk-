@@ -1,13 +1,841 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + React + TS</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Web to Native App Converter</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      line-height: 1.6;
+      background-color: #f8f9fa;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .btn {
+      display: inline-block;
+      padding: 10px 20px;
+      background-color: #4f46e5;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      text-decoration: none;
+      font-size: 16px;
+      transition: background-color 0.3s;
+    }
+    .btn:hover {
+      background-color: #4338ca;
+    }
+    .form-control {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useRef, useEffect } = React;
+
+    function App() {
+      const [form, setForm] = useState({
+        websiteUrl: '',
+        appName: '',
+        packageName: '',
+        bundleId: '',
+        platform: 'both',
+        admobAppId: '',
+        admobBannerId: '',
+        admobInterstitialId: '',
+      });
+
+      const [files, setFiles] = useState({
+        htmlZip: null,
+        appIcon: null,
+        splashScreen: null,
+      });
+
+      const [isConverting, setIsConverting] = useState(false);
+      const [showAdmobFields, setShowAdmobFields] = useState(false);
+      const [conversionType, setConversionType] = useState('url');
+      const [convertedApps, setConvertedApps] = useState([]);
+      const [editingApp, setEditingApp] = useState(null);
+      const [toasts, setToasts] = useState([]);
+      const fileInputRef = useRef(null);
+
+      // Simple toast implementation
+      const toast = {
+        success: (message) => addToast(message, 'success'),
+        error: (message) => addToast(message, 'error'),
+        loading: (message) => addToast(message, 'loading'),
+      };
+
+      const addToast = (message, type) => {
+        const id = Date.now();
+        setToasts(prev => [...prev, { id, message, type }]);
+        setTimeout(() => removeToast(id), 3000);
+      };
+
+      const removeToast = (id) => {
+        setToasts(prev => prev.filter(toast => toast.id !== id));
+      };
+
+      useEffect(() => {
+        const savedApps = localStorage.getItem('convertedApps');
+        if (savedApps) {
+          try {
+            setConvertedApps(JSON.parse(savedApps));
+          } catch (e) {
+            console.error("Error parsing saved apps:", e);
+            localStorage.removeItem('convertedApps');
+          }
+        }
+      }, []);
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        setIsConverting(true);
+        
+        try {
+          if (conversionType === 'zip' && !files.htmlZip) {
+            throw new Error('Please upload HTML ZIP file');
+          }
+          if (!files.appIcon) {
+            throw new Error('Please upload app icon');
+          }
+
+          // Simulate processing delay
+          await new Promise(resolve => setTimeout(resolve, 2000));
+
+          const newApp = {
+            id: editingApp?.id || Date.now().toString(),
+            appName: form.appName,
+            packageName: form.packageName,
+            bundleId: form.bundleId,
+            platform: form.platform,
+            websiteUrl: conversionType === 'url' ? form.websiteUrl : undefined,
+            htmlZip: conversionType === 'zip' ? files.htmlZip?.name : undefined,
+            appIcon: URL.createObjectURL(files.appIcon),
+            splashScreen: files.splashScreen ? URL.createObjectURL(files.splashScreen) : undefined,
+            createdAt: editingApp?.createdAt || new Date(),
+            lastUpdated: new Date(),
+          };
+
+          let updatedApps;
+          if (editingApp) {
+            updatedApps = convertedApps.map(app => app.id === editingApp.id ? newApp : app);
+            toast.success('App updated successfully!');
+          } else {
+            updatedApps = [...convertedApps, newApp];
+            toast.success('App conversion completed!');
+          }
+
+          setConvertedApps(updatedApps);
+          localStorage.setItem('convertedApps', JSON.stringify(updatedApps));
+
+          if (!editingApp) {
+            setForm({
+              websiteUrl: '',
+              appName: '',
+              packageName: '',
+              bundleId: '',
+              platform: 'both',
+              admobAppId: '',
+              admobBannerId: '',
+              admobInterstitialId: '',
+            });
+            setFiles({
+              htmlZip: null,
+              appIcon: null,
+              splashScreen: null,
+            });
+          }
+        } catch (error) {
+          toast.error(error.message || 'Conversion failed');
+        } finally {
+          setIsConverting(false);
+        }
+      };
+
+      const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setForm(prev => ({ ...prev, [name]: value }));
+      };
+
+      const handleFileChange = (e, type) => {
+        if (e.target.files && e.target.files[0]) {
+          setFiles(prev => ({ ...prev, [type]: e.target.files[0] }));
+          toast.success(`${type} uploaded successfully!`);
+        }
+      };
+
+      const handleEdit = (app) => {
+        setEditingApp(app);
+        setForm({
+          websiteUrl: app.websiteUrl || '',
+          appName: app.appName,
+          packageName: app.packageName,
+          bundleId: app.bundleId,
+          platform: app.platform,
+          admobAppId: '',
+          admobBannerId: '',
+          admobInterstitialId: '',
+        });
+        setConversionType(app.websiteUrl ? 'url' : 'zip');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
+
+      const handleDelete = (appId) => {
+        if (confirm('Are you sure you want to delete this app?')) {
+          const updatedApps = convertedApps.filter(app => app.id !== appId);
+          setConvertedApps(updatedApps);
+          localStorage.setItem('convertedApps', JSON.stringify(updatedApps));
+          toast.success('App deleted successfully!');
+        }
+      };
+
+      const handleDownload = (app) => {
+        toast.loading('Preparing download...');
+        setTimeout(() => {
+          toast.success(`Download started for ${app.appName}`);
+          // In a real implementation, this would generate actual files
+          // For this simplified version, we'll just show a success message
+        }, 2000);
+      };
+
+      // Simple icon components to replace lucide-react
+      const Icon = ({ name, ...props }) => {
+        const icons = {
+          upload: () => <span>↑</span>,
+          download: () => <span>↓</span>,
+          edit: () => <span>✏️</span>,
+          trash: () => <span>🗑️</span>,
+          globe: () => <span>🌐</span>,
+          package: () => <span>📦</span>,
+          image: () => <span>🖼️</span>,
+          settings: () => <span>⚙️</span>,
+          alert: () => <span>⚠️</span>,
+          smartphone: () => <span>📱</span>,
+          sparkles: () => <span>✨</span>,
+          android: () => <span>🤖</span>,
+          apple: () => <span>🍎</span>,
+          code: () => <span>💻</span>,
+          palette: () => <span>🎨</span>,
+          zap: () => <span>⚡</span>,
+        };
+        const IconComponent = icons[name.toLowerCase()] || (() => <span>?</span>);
+        return <IconComponent {...props} />;
+      };
+
+      return (
+        <div className="container">
+          {/* Toaster */}
+          <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 1000 }}>
+            {toasts.map(toast => (
+              <div key={toast.id} className="card" style={{ marginBottom: '10px', minWidth: '200px' }}>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  {toast.type === 'loading' && <span style={{ marginRight: '10px' }}>⏳</span>}
+                  {toast.type === 'success' && <span style={{ marginRight: '10px' }}>✅</span>}
+                  {toast.type === 'error' && <span style={{ marginRight: '10px' }}>❌</span>}
+                  <span>{toast.message}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Header */}
+          <div className="card" style={{ textAlign: 'center', marginBottom: '30px' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
+              <div style={{ position: 'relative' }}>
+                <Icon name="sparkles" style={{ fontSize: '24px', position: 'absolute', top: '-10px', left: '-10px' }} />
+                <Icon name="smartphone" style={{ fontSize: '24px', position: 'relative', zIndex: 1 }} />
+              </div>
+            </div>
+            <h1 style={{ fontSize: '2.5rem', fontWeight: 'bold', marginBottom: '10px', background: 'linear-gradient(to right, #7c3aed, #4f46e5)', WebkitBackgroundClip: 'text', color: 'transparent' }}>
+              {editingApp ? 'Update Your App' : 'Web to Native App Studio'}
+            </h1>
+            <p style={{ fontSize: '1.2rem', color: '#666', maxWidth: '800px', margin: '0 auto' }}>
+              Transform your web presence into powerful native mobile apps for both iOS and Android platforms
+            </p>
+          </div>
+
+          {/* Platform Selection */}
+          <div className="card" style={{ marginBottom: '20px' }}>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '15px' }}>Choose Platform</h3>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setForm(prev => ({ ...prev, platform: 'android' }))}
+                style={{
+                  flex: 1,
+                  padding: '15px',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                  minWidth: '200px',
+                  backgroundColor: form.platform === 'android' ? '#10b981' : '#f3f4f6',
+                  color: form.platform === 'android' ? 'white' : '#4b5563',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <Icon name="android" />
+                <span>Android Only</span>
+              </button>
+              <button
+                onClick={() => setForm(prev => ({ ...prev, platform: 'ios' }))}
+                style={{
+                  flex: 1,
+                  padding: '15px',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                  minWidth: '200px',
+                  backgroundColor: form.platform === 'ios' ? '#3b82f6' : '#f3f4f6',
+                  color: form.platform === 'ios' ? 'white' : '#4b5563',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <Icon name="apple" />
+                <span>iOS Only</span>
+              </button>
+              <button
+                onClick={() => setForm(prev => ({ ...prev, platform: 'both' }))}
+                style={{
+                  flex: 1,
+                  padding: '15px',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                  minWidth: '200px',
+                  backgroundColor: form.platform === 'both' ? '#8b5cf6' : '#f3f4f6',
+                  color: form.platform === 'both' ? 'white' : '#4b5563',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <Icon name="android" />
+                  <span style={{ margin: '0 5px' }}>+</span>
+                  <Icon name="apple" />
+                </div>
+                <span>Both</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Source Selection */}
+          <div className="card" style={{ marginBottom: '20px' }}>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '15px' }}>Choose Source</h3>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setConversionType('url')}
+                style={{
+                  flex: 1,
+                  padding: '15px',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                  minWidth: '200px',
+                  backgroundColor: conversionType === 'url' ? '#4f46e5' : '#f3f4f6',
+                  color: conversionType === 'url' ? 'white' : '#4b5563',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <Icon name="globe" />
+                <span>Website URL</span>
+              </button>
+              <button
+                onClick={() => setConversionType('zip')}
+                style={{
+                  flex: 1,
+                  padding: '15px',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                  minWidth: '200px',
+                  backgroundColor: conversionType === 'zip' ? '#4f46e5' : '#f3f4f6',
+                  color: conversionType === 'zip' ? 'white' : '#4b5563',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <Icon name="package" />
+                <span>HTML ZIP</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Main Form */}
+          <form onSubmit={handleSubmit} className="card" style={{ marginBottom: '20px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* Source Input */}
+              {conversionType === 'url' ? (
+                <div>
+                  <label style={{ display: 'block', fontSize: '1.125rem', fontWeight: '500', marginBottom: '10px' }}>
+                    Website URL
+                  </label>
+                  <input
+                    type="url"
+                    name="websiteUrl"
+                    value={form.websiteUrl}
+                    onChange={handleInputChange}
+                    placeholder="https://your-website.com"
+                    className="form-control"
+                    required
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label style={{ display: 'block', fontSize: '1.125rem', fontWeight: '500', marginBottom: '10px' }}>
+                    HTML ZIP File
+                  </label>
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: '20px', border: '2px dashed #ddd', borderRadius: '12px' }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <Icon name="package" style={{ fontSize: '24px', margin: '0 auto 10px' }} />
+                      <label style={{ color: '#4f46e5', fontWeight: '500', cursor: 'pointer' }}>
+                        Upload a ZIP file
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          accept=".zip"
+                          onChange={(e) => handleFileChange(e, 'htmlZip')}
+                          style={{ display: 'none' }}
+                        />
+                      </label>
+                      <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '5px' }}>
+                        {files.htmlZip ? files.htmlZip.name : 'ZIP file containing your HTML website'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* App Details */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '15px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '1.125rem', fontWeight: '500', marginBottom: '10px' }}>
+                    App Name
+                  </label>
+                  <input
+                    type="text"
+                    name="appName"
+                    value={form.appName}
+                    onChange={handleInputChange}
+                    placeholder="My Amazing App"
+                    className="form-control"
+                    required
+                  />
+                </div>
+
+                {(form.platform === 'android' || form.platform === 'both') && (
+                  <div>
+                    <label style={{ display: 'block', fontSize: '1.125rem', fontWeight: '500', marginBottom: '10px' }}>
+                      Android Package Name
+                    </label>
+                    <input
+                      type="text"
+                      name="packageName"
+                      value={form.packageName}
+                      onChange={handleInputChange}
+                      placeholder="com.example.myapp"
+                      className="form-control"
+                      required={form.platform === 'android' || form.platform === 'both'}
+                    />
+                  </div>
+                )}
+
+                {(form.platform === 'ios' || form.platform === 'both') && (
+                  <div>
+                    <label style={{ display: 'block', fontSize: '1.125rem', fontWeight: '500', marginBottom: '10px' }}>
+                      iOS Bundle ID
+                    </label>
+                    <input
+                      type="text"
+                      name="bundleId"
+                      value={form.bundleId}
+                      onChange={handleInputChange}
+                      placeholder="com.example.myapp"
+                      className="form-control"
+                      required={form.platform === 'ios' || form.platform === 'both'}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* App Icon & Splash Screen */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '15px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '1.125rem', fontWeight: '500', marginBottom: '10px' }}>
+                    App Icon
+                  </label>
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: '20px', border: '2px dashed #ddd', borderRadius: '12px' }}>
+                    <div style={{ textAlign: 'center' }}>
+                      {files.appIcon ? (
+                        <img
+                          src={URL.createObjectURL(files.appIcon)}
+                          alt="App Icon Preview"
+                          style={{ width: '100px', height: '100px', objectFit: 'contain', borderRadius: '12px', margin: '0 auto 10px' }}
+                        />
+                      ) : (
+                        <Icon name="image" style={{ fontSize: '24px', margin: '0 auto 10px' }} />
+                      )}
+                      <label style={{ color: '#4f46e5', fontWeight: '500', cursor: 'pointer' }}>
+                        Upload an icon
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleFileChange(e, 'appIcon')}
+                          style={{ display: 'none' }}
+                        />
+                      </label>
+                      <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '5px' }}>
+                        {files.appIcon ? files.appIcon.name : 'Recommended: 1024x1024px'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '1.125rem', fontWeight: '500', marginBottom: '10px' }}>
+                    Splash Screen (Optional)
+                  </label>
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: '20px', border: '2px dashed #ddd', borderRadius: '12px' }}>
+                    <div style={{ textAlign: 'center' }}>
+                      {files.splashScreen ? (
+                        <img
+                          src={URL.createObjectURL(files.splashScreen)}
+                          alt="Splash Screen Preview"
+                          style={{ width: '100px', height: '100px', objectFit: 'contain', borderRadius: '12px', margin: '0 auto 10px' }}
+                        />
+                      ) : (
+                        <Icon name="image" style={{ fontSize: '24px', margin: '0 auto 10px' }} />
+                      )}
+                      <label style={{ color: '#4f46e5', fontWeight: '500', cursor: 'pointer' }}>
+                        Upload splash screen
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleFileChange(e, 'splashScreen')}
+                          style={{ display: 'none' }}
+                        />
+                      </label>
+                      <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '5px' }}>
+                        {files.splashScreen ? files.splashScreen.name : 'Recommended: 2732x2732px'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* AdMob Integration */}
+              <div style={{ borderTop: '1px solid #eee', paddingTop: '15px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowAdmobFields(!showAdmobFields)}
+                  style={{ display: 'flex', alignItems: 'center', color: '#4f46e5', background: 'none', border: 'none', cursor: 'pointer' }}
+                >
+                  <Icon name="settings" style={{ marginRight: '5px' }} />
+                  {showAdmobFields ? 'Hide' : 'Configure'} AdMob Integration
+                </button>
+              </div>
+
+              {showAdmobFields && (
+                <div style={{ borderTop: '1px solid #eee', paddingTop: '15px' }}>
+                  <div style={{ backgroundColor: '#eef2ff', padding: '15px', borderRadius: '12px', display: 'flex', alignItems: 'flex-start' }}>
+                    <Icon name="alert" style={{ marginRight: '10px', flexShrink: 0 }} />
+                    <p style={{ fontSize: '0.875rem', color: '#4f46e5' }}>
+                      Add your AdMob credentials to monetize your app. You have full control over ad placement and frequency.
+                    </p>
+                  </div>
+
+                  <div style={{ marginTop: '15px' }}>
+                    <label style={{ display: 'block', fontSize: '1.125rem', fontWeight: '500', marginBottom: '10px' }}>
+                      AdMob App ID
+                    </label>
+                    <input
+                      type="text"
+                      name="admobAppId"
+                      value={form.admobAppId}
+                      onChange={handleInputChange}
+                      placeholder="ca-app-pub-xxxxxxxxxxxxxxxx~yyyyyyyyyy"
+                      className="form-control"
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '15px', marginTop: '15px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '1.125rem', fontWeight: '500', marginBottom: '10px' }}>
+                        Banner Ad Unit ID
+                      </label>
+                      <input
+                        type="text"
+                        name="admobBannerId"
+                        value={form.admobBannerId}
+                        onChange={handleInputChange}
+                        placeholder="ca-app-pub-xxxxxxxxxxxxxxxx/yyyyyyyyyy"
+                        className="form-control"
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '1.125rem', fontWeight: '500', marginBottom: '10px' }}>
+                        Interstitial Ad Unit ID
+                      </label>
+                      <input
+                        type="text"
+                        name="admobInterstitialId"
+                        value={form.admobInterstitialId}
+                        onChange={handleInputChange}
+                        placeholder="ca-app-pub-xxxxxxxxxxxxxxxx/yyyyyyyyyy"
+                        className="form-control"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={isConverting}
+                style={{
+                  width: '100%',
+                  padding: '15px',
+                  borderRadius: '12px',
+                  color: 'white',
+                  fontWeight: '500',
+                  fontSize: '1.125rem',
+                  background: isConverting ? '#9ca3af' : 'linear-gradient(to right, #7c3aed, #4f46e5)',
+                  border: 'none',
+                  cursor: isConverting ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                }}
+              >
+                {isConverting ? (
+                  <>
+                    <span>⏳</span>
+                    {editingApp ? 'Updating...' : 'Converting...'}
+                  </>
+                ) : (
+                  <>
+                    <Icon name="download" />
+                    {editingApp ? 'Update App' : 'Convert Now'}
+                  </>
+                )}
+              </button>
+
+              {editingApp && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingApp(null);
+                    setForm({
+                      websiteUrl: '',
+                      appName: '',
+                      packageName: '',
+                      bundleId: '',
+                      platform: 'both',
+                      admobAppId: '',
+                      admobBannerId: '',
+                      admobInterstitialId: '',
+                    });
+                    setFiles({
+                      htmlZip: null,
+                      appIcon: null,
+                      splashScreen: null,
+                    });
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '15px',
+                    borderRadius: '12px',
+                    color: '#4b5563',
+                    fontWeight: '500',
+                    fontSize: '1.125rem',
+                    backgroundColor: '#f3f4f6',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancel Editing
+                </button>
+              )}
+            </div>
+          </form>
+
+          {/* Converted Apps List */}
+          {convertedApps.length > 0 && (
+            <div className="card" style={{ marginTop: '30px' }}>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '15px' }}>Your Apps</h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                {convertedApps.map(app => (
+                  <div key={app.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '15px', backgroundColor: '#f9fafb', borderRadius: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                      <img
+                        src={app.appIcon}
+                        alt={app.appName}
+                        style={{ width: '60px', height: '60px', borderRadius: '12px', objectFit: 'cover' }}
+                      />
+                      <div>
+                        <h3 style={{ fontSize: '1.125rem', fontWeight: '600' }}>{app.appName}</h3>
+                        <div style={{ display: 'flex', gap: '5px', marginTop: '5px' }}>
+                          {(app.platform === 'android' || app.platform === 'both') && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 8px', borderRadius: '9999px', backgroundColor: '#d1fae5', color: '#065f46', fontSize: '0.75rem' }}>
+                              <Icon name="android" style={{ marginRight: '3px', fontSize: '12px' }} />
+                              Android
+                            </span>
+                          )}
+                          {(app.platform === 'ios' || app.platform === 'both') && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 8px', borderRadius: '9999px', backgroundColor: '#dbeafe', color: '#1e40af', fontSize: '0.75rem' }}>
+                              <Icon name="apple" style={{ marginRight: '3px', fontSize: '12px' }} />
+                              iOS
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <button
+                        onClick={() => handleEdit(app)}
+                        style={{ padding: '8px', color: '#4f46e5', backgroundColor: '#eef2ff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+                        title="Edit App"
+                      >
+                        <Icon name="edit" />
+                      </button>
+                      <button
+                        onClick={() => handleDownload(app)}
+                        style={{ padding: '8px', color: '#10b981', backgroundColor: '#ecfdf5', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+                        title="Download App"
+                      >
+                        <Icon name="download" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(app.id)}
+                        style={{ padding: '8px', color: '#ef4444', backgroundColor: '#fee2e2', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+                        title="Delete App"
+                      >
+                        <Icon name="trash" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Features Grid */}
+          <div style={{ marginTop: '40px', display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}>
+            <div className="card">
+              <div style={{ width: '50px', height: '50px', borderRadius: '9999px', background: 'linear-gradient(to bottom right, #ede9fe, #c7d2fe)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '15px' }}>
+                <Icon name="code" style={{ fontSize: '24px', color: '#4f46e5' }} />
+              </div>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '10px' }}>Multiple Platforms</h3>
+              <p style={{ color: '#6b7280' }}>Build for both iOS and Android from a single codebase</p>
+            </div>
+
+            <div className="card">
+              <div style={{ width: '50px', height: '50px', borderRadius: '9999px', background: 'linear-gradient(to bottom right, #ede9fe, #c7d2fe)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '15px' }}>
+                <Icon name="palette" style={{ fontSize: '24px', color: '#4f46e5' }} />
+              </div>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '10px' }}>Custom Branding</h3>
+              <p style={{ color: '#6b7280' }}>Full control over app appearance and branding elements</p>
+            </div>
+
+            <div className="card">
+              <div style={{ width: '50px', height: '50px', borderRadius: '9999px', background: 'linear-gradient(to bottom right, #ede9fe, #c7d2fe)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '15px' }}>
+                <Icon name="zap" style={{ fontSize: '24px', color: '#4f46e5' }} />
+              </div>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '10px' }}>Instant Preview</h3>
+              <p style={{ color: '#6b7280' }}>Real-time preview of your app during development</p>
+            </div>
+          </div>
+
+          {/* How It Works */}
+          <div className="card" style={{ marginTop: '40px' }}>
+            <h2 style={{ fontSize: '1.75rem', fontWeight: 'bold', marginBottom: '20px' }}>How It Works</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+                <div style={{ flexShrink: 0, width: '40px', height: '40px', borderRadius: '9999px', background: 'linear-gradient(to right, #7c3aed, #4f46e5)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '600' }}>
+                  1
+                </div>
+                <div style={{ marginLeft: '15px' }}>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '5px' }}>Choose Your Source</h3>
+                  <p style={{ color: '#6b7280' }}>Start with your website URL or upload your HTML files</p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+                <div style={{ flexShrink: 0, width: '40px', height: '40px', borderRadius: '9999px', background: 'linear-gradient(to right, #7c3aed, #4f46e5)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '600' }}>
+                  2
+                </div>
+                <div style={{ marginLeft: '15px' }}>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '5px' }}>Customize Your App</h3>
+                  <p style={{ color: '#6b7280' }}>Add your branding, configure settings, and set up monetization</p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+                <div style={{ flexShrink: 0, width: '40px', height: '40px', borderRadius: '9999px', background: 'linear-gradient(to right, #7c3aed, #4f46e5)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '600' }}>
+                  3
+                </div>
+                <div style={{ marginLeft: '15px' }}>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '5px' }}>Generate & Download</h3>
+                  <p style={{ color: '#6b7280' }}>Get your ready-to-publish iOS and Android apps instantly</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Wait for DOM to be fully loaded before rendering
+  document.addEventListener('DOMContentLoaded', () => {
+    const rootElement = document.getElementById('root');
+    if (rootElement) {
+      const root = ReactDOM.createRoot(rootElement);
+      root.render(<App />);
+    } else {
+      console.error("Root element not found");
+    }
+  });
+  </script>
+</body>
 </html>
